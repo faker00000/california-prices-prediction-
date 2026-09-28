@@ -1,0 +1,7 @@
+services:
+  app:
+    build: .
+    image: california-prices-prediction
+    ports:
+      - "8501:8501"
+    restart: unless-stopped
