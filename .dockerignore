@@ -1,0 +1,11 @@
+.git
+.gitignore
+.venv/
+venv/
+__pycache__/
+*.pyc
+models/
+.ipynb_checkpoints/
+Dockerfile
+.dockerignore
+README.md
