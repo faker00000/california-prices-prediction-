@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A new push to the same branch cancels the run still in progress
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docker:
+    name: Build image and smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Builds the image, which also trains the models (train_models.py).
+      # The layer cache is stored in GitHub, so unchanged steps such as
+      # pip install are reused on later runs.
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: california-prices-prediction:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Start container
+        run: docker run -d --name app -p 8501:8501 california-prices-prediction:ci
+
+      - name: Wait for the app to be healthy
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8501/_stcore/health; then
+              echo " - app is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "App did not become healthy in 60s"
+          exit 1
+
+      - name: Check that the models were trained into the image
+        run: |
+          docker exec app ls -l models/
+          docker exec app test -f models/meta.json
+          docker exec app test -f models/metrics.csv
+
+      - name: Show training metrics
+        run: docker exec app cat models/metrics.csv
+
+      - name: Show container logs
+        if: always()
+        run: docker logs app || true
